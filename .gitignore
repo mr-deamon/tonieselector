@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+.env
+data/library/
+data/processed/
+data/rejected/
+data/posters/
+*.sqlite3

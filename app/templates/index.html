@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tonie Selector</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <div>
+        <h1>Tonie Selector</h1>
+        <p class="subtitle">Pick a Tonie, choose your stories, and keep it under 60 minutes.</p>
+      </div>
+      <form action="/scan" method="post" class="scan-form">
+        <button type="submit" class="secondary">Process Inbox ✨</button>
+      </form>
+    </header>
+
+    {% if message %}
+      <div class="message {{ message_type }}">{{ message }}</div>
+    {% endif %}
+
+    <form action="/upload" method="post" id="upload-form">
+      <section class="toolbar">
+        <div class="toolbar-group">
+          <p class="picker-title">Choose a Tonie</p>
+          {% if figure_options %}
+            <div class="tonie-grid" role="radiogroup" aria-label="Tonie figure">
+              {% for option in figure_options %}
+                <label class="tonie-card">
+                  <input
+                    type="radio"
+                    name="figure_id"
+                    value="{{ option.id }}"
+                    {% if option.id == selected_figure_id %}checked{% endif %}
+                    {% if not selected_figure_id and loop.first %}checked{% endif %}
+                  />
+                  <div class="tonie-image-wrap">
+                    {% set tonie_image = option.image_url or option.imageUrl %}
+                    {% if tonie_image %}
+                      <img src="{{ tonie_image }}" alt="{{ option.name }}" loading="lazy" />
+                    {% else %}
+                      <img src="/static/placeholder.svg" alt="{{ option.name }}" loading="lazy" />
+                    {% endif %}
+                  </div>
+                  <div class="tonie-name" title="{{ option.name }}">{{ option.name }}</div>
+                </label>
+              {% endfor %}
+            </div>
+          {% else %}
+            <input type="text" name="figure_id" value="{{ selected_figure_id or default_figure_id }}" placeholder="tonie-figure-id" />
+          {% endif %}
+          {% if figure_api_error %}
+            <small class="hint">Could not load figures from API. Using fallback selector values.</small>
+          {% endif %}
+        </div>
+
+        <div class="duration-wrap">
+          <div class="duration">Total: <span id="total-minutes">0</span> min / 60 min</div>
+          <small id="duration-hint" class="duration-hint" aria-live="polite"></small>
+        </div>
+        <button type="submit" id="upload-button">Upload selection 🚀</button>
+      </section>
+
+      {% for series_name, albums in series_groups.items() %}
+        <section class="series">
+          <h2>{{ series_name }}</h2>
+          <div class="album-grid">
+            {% for album in albums %}
+              <article class="album">
+                <label>
+                  <input
+                    type="checkbox"
+                    name="selected_album_ids"
+                    value="{{ album.id }}"
+                    data-duration="{{ album.duration_seconds }}"
+                  />
+                  <div class="poster-wrap">
+                    {% if album.poster_path %}
+                      {% if '/app/data/' in album.poster_path %}
+                        <img src="/media/{{ album.poster_path.split('/app/data/')[1] }}" alt="{{ album.name }}" />
+                      {% elif 'data/' in album.poster_path %}
+                        <img src="/media/{{ album.poster_path.split('data/')[1] }}" alt="{{ album.name }}" />
+                      {% else %}
+                        <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                      {% endif %}
+                    {% else %}
+                      <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                    {% endif %}
+                  </div>
+                  <div class="meta">
+                    <strong title="{{ album.name }}">{{ album.name }}</strong>
+                    <span>{{ (album.duration_seconds / 60) | round(0, 'ceil') | int }} min</span>
+                  </div>
+                </label>
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% endfor %}
+    </form>
+  </main>
+
+  <script>
+    const checkboxes = Array.from(document.querySelectorAll('input[name="selected_album_ids"]'));
+    const totalMinutesNode = document.getElementById('total-minutes');
+    const durationHintNode = document.getElementById('duration-hint');
+    const uploadButton = document.getElementById('upload-button');
+    const maxSeconds = 3600;
+
+    function updateTotals(changedBox = null) {
+      let total = checkboxes
+        .filter((box) => box.checked)
+        .reduce((sum, box) => sum + Number(box.dataset.duration || 0), 0);
+
+      if (total > maxSeconds && changedBox) {
+        changedBox.checked = false;
+        total = checkboxes
+          .filter((box) => box.checked)
+          .reduce((sum, box) => sum + Number(box.dataset.duration || 0), 0);
+        durationHintNode.textContent = 'That would be over 60 minutes. Pick a shorter mix.';
+      } else {
+        durationHintNode.textContent = '';
+      }
+
+      uploadButton.disabled = total > maxSeconds;
+      totalMinutesNode.textContent = String(Math.ceil(total / 60));
+    }
+
+    checkboxes.forEach((box) => {
+      box.addEventListener('change', () => updateTotals(box));
+    });
+
+    updateTotals();
+  </script>
+</body>
+</html>
