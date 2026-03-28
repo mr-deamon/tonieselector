@@ -18,14 +18,20 @@ class Settings(BaseSettings):
     my_tonies_ui_locales: str = ""
     my_tonies_username: str = ""
     my_tonies_password: str = ""
-    my_tonies_mock_upload: bool = True
     default_figure_id: str = ""
     figure_options: str = ""
+    figure_whitelist: str = ""
+    figure_blacklist: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()
+
+
+def parse_figure_list(raw_value: str) -> list[str]:
+    """Parse a comma-separated list of figure IDs into a Python list."""
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
 
 
 def parse_figure_options(raw_value: str) -> list[dict[str, str]]:

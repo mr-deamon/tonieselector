@@ -40,25 +40,7 @@ class MyToniesClient:
                     continue
                 seen_ids.add(figure_id_text)
                 label = tonie.get("name") or figure_id_text
-                image_url = next(
-                    (
-                        str(value)
-                        for key in (
-                            "imageUrl",
-                            "image_url",
-                            "image",
-                            "avatarUrl",
-                            "avatar_url",
-                            "picture",
-                            "pictureUrl",
-                            "picture_url",
-                            "iconUrl",
-                            "icon_url",
-                        )
-                        if (value := tonie.get(key))
-                    ),
-                    "",
-                )
+                image_url = str(tonie.get("imageUrl") or "")
                 figure = {"id": figure_id_text, "name": str(label)}
                 if image_url:
                     figure["image_url"] = image_url
@@ -67,13 +49,6 @@ class MyToniesClient:
         return figures
 
     async def upload_album_files(self, figure_id: str, files: list[Path]) -> dict:
-        if settings.my_tonies_mock_upload:
-            return {
-                "status": "mocked",
-                "figure_id": figure_id,
-                "uploaded_files": [str(path) for path in files],
-            }
-
         if not settings.my_tonies_base_url:
             raise RuntimeError("MY_TONIES_BASE_URL is required (example: https://api.prod.tcs.toys/v2)")
 
@@ -227,26 +202,16 @@ class MyToniesClient:
         chapter_items: list[dict[str, str]],
     ) -> None:
         endpoint = f"{settings.my_tonies_base_url.rstrip('/')}/households/{household_id}/creativetonies/{figure_id}"
-        uploaded_file_ids = [item.get("file", "") for item in chapter_items if item.get("file")]
-        payload_variants = [
-            {"chapters": chapter_items},
-            {"chapters": [{"file": item.get("file"), "name": item.get("title")} for item in chapter_items]},
-            {"chapters": [{"file": file_id} for file_id in uploaded_file_ids]},
-            {"chapters": uploaded_file_ids},
-        ]
-
-        last_error: str | None = None
-        for payload in payload_variants:
-            response = await client.patch(
-                endpoint,
-                headers={**headers, "Content-Type": "application/json"},
-                json=payload,
+        response = await client.patch(
+            endpoint,
+            headers={**headers, "Content-Type": "application/json"},
+            json={"chapters": chapter_items},
+        )
+        if not response.is_success:
+            raise RuntimeError(
+                f"Applying chapters failed for figure {figure_id}: "
+                f"status={response.status_code} body={response.text[:500]}"
             )
-            if response.is_success:
-                return
-            last_error = f"status={response.status_code} body={response.text[:500]}"
-
-        raise RuntimeError(f"Applying chapters failed for figure {figure_id}: {last_error}")
 
     async def _build_auth_headers(self) -> dict[str, str]:
         token = await self._get_access_token()

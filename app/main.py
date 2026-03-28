@@ -1,4 +1,3 @@
-from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -7,9 +6,9 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
-from app.config import parse_figure_options, settings
+from app.config import parse_figure_list, parse_figure_options, settings
 from app.database import Base, engine, get_session
 from app.models import Album
 from app.services.my_tonies import MyToniesClient
@@ -39,14 +38,10 @@ async def index(request: Request, db: Session = Depends(get_session)):
 
 async def _build_index_context(request: Request, db: Session, message: str | None = None, message_type: str = "info"):
     albums = (
-        db.execute(select(Album).options(selectinload(Album.series)).order_by(Album.name.asc()))
+        db.execute(select(Album).order_by(Album.name.asc()))
         .scalars()
         .all()
     )
-
-    grouped: dict[str, list[Album]] = defaultdict(list)
-    for album in albums:
-        grouped[album.series.name].append(album)
 
     query_message = request.query_params.get("message")
     query_message_type = request.query_params.get("message_type", "info")
@@ -66,12 +61,20 @@ async def _build_index_context(request: Request, db: Session, message: str | Non
     except Exception:
         figure_api_error = True
 
+    # Apply whitelist / blacklist (mutually exclusive; whitelist takes priority)
+    whitelist = parse_figure_list(settings.figure_whitelist)
+    blacklist = parse_figure_list(settings.figure_blacklist)
+    if whitelist:
+        figure_options = [o for o in figure_options if o["id"] in whitelist]
+    elif blacklist:
+        figure_options = [o for o in figure_options if o["id"] not in blacklist]
+
     if selected_figure_id and all(option["id"] != selected_figure_id for option in figure_options):
         figure_options.insert(0, {"id": selected_figure_id, "name": selected_figure_id})
 
     return {
         "request": request,
-        "series_groups": dict(sorted(grouped.items())),
+        "albums": albums,
         "default_figure_id": settings.default_figure_id,
         "selected_figure_id": selected_figure_id,
         "figure_options": figure_options,
@@ -119,8 +122,8 @@ async def upload(
     )
 
     total_duration = sum(album.duration_seconds for album in albums)
-    if total_duration > 3600:
-        return await _render_with_message(request, db, "Selected albums exceed 60 minutes.", "error")
+    if total_duration > 5400:
+        return await _render_with_message(request, db, "Selected albums exceed 90 minutes.", "error")
 
     resolved_figure_id = figure_id or settings.default_figure_id
     if not resolved_figure_id:

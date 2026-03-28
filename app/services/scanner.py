@@ -1,7 +1,6 @@
 import shutil
 import re
 import unicodedata
-import base64
 from pathlib import Path
 
 from mutagen import File as MutagenFile
@@ -28,16 +27,19 @@ def _normalize_text(value: str) -> str:
     return unicodedata.normalize("NFC", value).strip()
 
 
-def _parse_flat_filename(file_path: Path) -> tuple[str, str] | None:
+def _parse_flat_filename(file_path: Path) -> str | None:
+    """Extract album name from a filename structured as 'Artist - Album - Part N'.
+    The artist prefix is ignored; only the album portion is returned."""
     stem = _normalize_text(file_path.stem)
     pattern = re.compile(r"^(.*?)\s-\s(.*?)\s-\s(?:teil|track|part)\s*\d+$", flags=re.IGNORECASE)
     match = pattern.match(stem)
     if match:
-        return _normalize_text(match.group(1)), _normalize_text(match.group(2))
+        return _normalize_text(match.group(2))
 
     fallback_parts = [part.strip() for part in stem.split(" - ")]
     if len(fallback_parts) >= 2:
-        return _normalize_text(fallback_parts[0]), _normalize_text(" - ".join(fallback_parts[1:]))
+        # Take the second segment as album name (first segment is assumed to be artist)
+        return _normalize_text(fallback_parts[1])
 
     return None
 
@@ -66,29 +68,28 @@ def _first_text_value(raw_value) -> str | None:
     return _normalize_text(str(raw_value))
 
 
-def _read_series_album_from_metadata(audio_file: Path) -> tuple[str, str] | None:
+def _read_album_name_from_metadata(audio_file: Path) -> str | None:
+    """Read only the album tag from an audio file's metadata."""
     media = MutagenFile(audio_file)
     tags = getattr(media, "tags", None)
     if not tags:
         return None
 
     album_keys = ["\xa9alb", "TALB", "album"]
-    series_keys = ["\xa9ART", "aART", "TPE1", "TPE2", "artist", "albumartist"]
 
     def get_tag_value(possible_keys: list[str]) -> str | None:
         for key in possible_keys:
-            if key in tags:
+            try:
+                found = key in tags
+            except ValueError:
+                continue
+            if found:
                 value = _first_text_value(tags.get(key))
                 if value:
                     return value
         return None
 
-    series_name = get_tag_value(series_keys)
-    album_name = get_tag_value(album_keys)
-    if not series_name or not album_name:
-        return None
-
-    return series_name, album_name
+    return get_tag_value(album_keys)
 
 
 def _stage_flat_inbox_files(inbox_root: Path) -> int:
@@ -104,29 +105,25 @@ def _stage_flat_inbox_files(inbox_root: Path) -> int:
         (path for path in root_files if path.suffix.lower() in IMAGE_EXTENSIONS),
         key=lambda path: _natural_sort_key(path.name),
     )
-    stem_targets: dict[str, tuple[str, str]] = {}
+    stem_targets: dict[str, str] = {}
 
     for file_path in audio_files:
-        parsed = _read_series_album_from_metadata(file_path) or _parse_flat_filename(file_path)
-        if parsed is None:
+        album_name = _read_album_name_from_metadata(file_path) or _parse_flat_filename(file_path)
+        if album_name is None:
             continue
 
-        series_name, album_name = parsed
-        target_dir = inbox_root / series_name / album_name
+        target_dir = inbox_root / album_name
         target_dir.mkdir(parents=True, exist_ok=True)
         shutil.move(str(file_path), str(target_dir / file_path.name))
-        stem_targets[_normalize_text(file_path.stem)] = (series_name, album_name)
+        stem_targets[_normalize_text(file_path.stem)] = album_name
         staged += 1
 
     for file_path in image_files:
-        parsed = stem_targets.get(_normalize_text(file_path.stem))
-        if parsed is None:
-            parsed = _parse_flat_filename(file_path)
-        if parsed is None:
+        album_name = stem_targets.get(_normalize_text(file_path.stem)) or _parse_flat_filename(file_path)
+        if album_name is None:
             continue
 
-        series_name, album_name = parsed
-        target_dir = inbox_root / series_name / album_name
+        target_dir = inbox_root / album_name
         target_dir.mkdir(parents=True, exist_ok=True)
         shutil.move(str(file_path), str(target_dir / file_path.name))
         staged += 1
@@ -168,7 +165,17 @@ def _extract_embedded_artwork(audio_file: Path, destination_stem: str) -> Path |
 
     output_path = settings.data_root / "posters" / f"{destination_stem}.jpg"
 
+    # FLAC: pictures are stored on media.pictures, not in tags
+    flac_pictures = getattr(media, "pictures", None)
+    if flac_pictures:
+        output_path.write_bytes(flac_pictures[0].data)
+        return output_path
+
     tags = media.tags
+    if tags is None:
+        return None
+
+    # MP4 (m4a)
     covr = tags.get("covr") if hasattr(tags, "get") else None
     if covr:
         first = covr[0] if isinstance(covr, list) else covr
@@ -176,22 +183,14 @@ def _extract_embedded_artwork(audio_file: Path, destination_stem: str) -> Path |
             output_path.write_bytes(bytes(first))
             return output_path
 
+    # ID3 (mp3)
     if hasattr(tags, "getall"):
         pictures = tags.getall("APIC")
         if pictures:
             output_path.write_bytes(pictures[0].data)
             return output_path
 
-    if hasattr(tags, "get"):
-        flac_picture = tags.get("metadata_block_picture")
-        if flac_picture:
-            encoded = flac_picture[0] if isinstance(flac_picture, list) else flac_picture
-            try:
-                output_path.write_bytes(base64.b64decode(encoded))
-                return output_path
-            except Exception:
-                pass
-
+    # Generic fallback: any tag value with a .data bytes attribute
     for tag in tags.values():
         data = getattr(tag, "data", None)
         if isinstance(data, bytes) and len(data) > 256:
@@ -227,7 +226,8 @@ def _upsert_album(session: Session, album_folder: Path, series_name: str, album_
         return existing_album
 
     audio_files = _find_audio_files(album_folder)
-    duration = sum(_read_duration_seconds(path) for path in audio_files)
+    track_infos = [(path, _read_duration_seconds(path)) for path in audio_files]
+    duration = sum(duration_seconds for _, duration_seconds in track_infos)
 
     poster = _find_folder_poster(album_folder)
     if poster is None and audio_files:
@@ -244,13 +244,13 @@ def _upsert_album(session: Session, album_folder: Path, series_name: str, album_
     session.add(album)
     session.flush()
 
-    for idx, track_file in enumerate(audio_files, start=1):
+    for idx, (track_file, track_duration) in enumerate(track_infos, start=1):
         session.add(
             Track(
                 album_id=album.id,
                 title=track_file.stem,
                 path=str(track_file),
-                duration_seconds=_read_duration_seconds(track_file),
+                duration_seconds=track_duration,
                 track_no=idx,
             )
         )
@@ -312,57 +312,80 @@ def process_inbox(session: Session) -> dict:
     rejected = 0
     staged = _stage_flat_inbox_files(inbox_root)
 
-    for series_dir in sorted(path for path in inbox_root.iterdir() if path.is_dir()):
-        series_name = series_dir.name
-        for album_dir in sorted(path for path in series_dir.iterdir() if path.is_dir()):
-            album_name = album_dir.name
-            album_slug = _slugify(album_name)
-            series_slug = _slugify(series_name)
+    def _process_album_dir(album_dir: Path, series_name: str, album_name: str) -> str:
+        """Move album_dir into library and register it. Returns 'added', 'duplicate', or 'rejected'."""
+        album_slug = _slugify(album_name)
+        series_slug = _slugify(series_name)
 
-            existing_series = session.scalar(select(Series).where(Series.slug == series_slug))
-            if existing_series is not None:
-                existing_album = session.scalar(
-                    select(Album).where(Album.series_id == existing_series.id, Album.slug == album_slug)
-                )
-                if existing_album is not None:
-                    target = rejected_root / series_dir.name / album_dir.name
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    if target.exists():
-                        shutil.rmtree(target)
-                    shutil.move(str(album_dir), str(target))
-                    duplicates += 1
-                    continue
-
-            target_dir = library_root / series_dir.name / album_dir.name
-            target_dir.parent.mkdir(parents=True, exist_ok=True)
-            if target_dir.exists():
-                target = rejected_root / series_dir.name / album_dir.name
+        existing_series = session.scalar(select(Series).where(Series.slug == series_slug))
+        if existing_series is not None:
+            existing_album = session.scalar(
+                select(Album).where(Album.series_id == existing_series.id, Album.slug == album_slug)
+            )
+            if existing_album is not None:
+                target = rejected_root / series_name / album_name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 if target.exists():
                     shutil.rmtree(target)
                 shutil.move(str(album_dir), str(target))
-                duplicates += 1
-                continue
+                return "duplicate"
 
-            try:
-                shutil.move(str(album_dir), str(target_dir))
-                _upsert_album(session, target_dir, series_name, album_name)
-                processed_target = processed_root / series_dir.name
-                processed_target.mkdir(parents=True, exist_ok=True)
-                marker = processed_target / f"{album_name}.processed"
-                marker.write_text("ok", encoding="utf-8")
-                added += 1
-            except Exception:
-                reject_target = rejected_root / series_dir.name / album_dir.name
-                reject_target.parent.mkdir(parents=True, exist_ok=True)
-                if reject_target.exists():
-                    shutil.rmtree(reject_target)
-                if album_dir.exists():
-                    shutil.move(str(album_dir), str(reject_target))
-                rejected += 1
+        target_dir = library_root / series_name / album_name
+        target_dir.parent.mkdir(parents=True, exist_ok=True)
+        if target_dir.exists():
+            target = rejected_root / series_name / album_name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.move(str(album_dir), str(target))
+            return "duplicate"
 
-        if not any(series_dir.iterdir()):
-            series_dir.rmdir()
+        try:
+            shutil.move(str(album_dir), str(target_dir))
+            _upsert_album(session, target_dir, series_name, album_name)
+            processed_target = processed_root / series_name
+            processed_target.mkdir(parents=True, exist_ok=True)
+            (processed_target / f"{album_name}.processed").write_text("ok", encoding="utf-8")
+            return "added"
+        except Exception:
+            reject_target = rejected_root / series_name / album_name
+            reject_target.parent.mkdir(parents=True, exist_ok=True)
+            if reject_target.exists():
+                shutil.rmtree(reject_target)
+            if album_dir.exists():
+                shutil.move(str(album_dir), str(reject_target))
+            return "rejected"
+
+    for inbox_child in sorted(path for path in inbox_root.iterdir() if path.is_dir()):
+        child_subdirs = [p for p in inbox_child.iterdir() if p.is_dir()]
+        child_audio = [p for p in inbox_child.iterdir() if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS]
+
+        if child_audio and not child_subdirs:
+            # Flat album dir (new single-level layout): album name = series name
+            album_name = inbox_child.name
+            result = _process_album_dir(inbox_child, album_name, album_name)
+        else:
+            # Two-level layout: inbox_child is a series dir
+            series_name = inbox_child.name
+            for album_dir in sorted(child_subdirs):
+                album_name = album_dir.name
+                result = _process_album_dir(album_dir, series_name, album_name)
+                if result == "added":
+                    added += 1
+                elif result == "duplicate":
+                    duplicates += 1
+                else:
+                    rejected += 1
+            if not any(inbox_child.iterdir()):
+                inbox_child.rmdir()
+            continue
+
+        if result == "added":
+            added += 1
+        elif result == "duplicate":
+            duplicates += 1
+        else:
+            rejected += 1
 
     session.commit()
     return {"staged": staged, "added": added, "duplicates": duplicates, "rejected": rejected}

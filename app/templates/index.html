@@ -11,7 +11,7 @@
     <header class="header">
       <div>
         <h1>Tonie Selector</h1>
-        <p class="subtitle">Pick a Tonie, choose your stories, and keep it under 60 minutes.</p>
+        <p class="subtitle">Pick a Tonie, choose your stories, and keep it under 90 minutes.</p>
       </div>
       <form action="/scan" method="post" class="scan-form">
         <button type="submit" class="secondary">Process Inbox ✨</button>
@@ -38,7 +38,7 @@
                     {% if not selected_figure_id and loop.first %}checked{% endif %}
                   />
                   <div class="tonie-image-wrap">
-                    {% set tonie_image = option.image_url or option.imageUrl %}
+                    {% set tonie_image = option.image_url %}
                     {% if tonie_image %}
                       <img src="{{ tonie_image }}" alt="{{ option.name }}" loading="lazy" />
                     {% else %}
@@ -58,57 +58,60 @@
         </div>
 
         <div class="duration-wrap">
-          <div class="duration">Total: <span id="total-minutes">0</span> min / 60 min</div>
+          <div class="duration">Total: <span id="total-minutes">0</span> min / 90 min</div>
           <small id="duration-hint" class="duration-hint" aria-live="polite"></small>
         </div>
         <button type="submit" id="upload-button">Upload selection 🚀</button>
       </section>
 
-      {% for series_name, albums in series_groups.items() %}
-        <section class="series">
-          <h2>{{ series_name }}</h2>
-          <div class="album-grid">
-            {% for album in albums %}
-              <article class="album">
-                <label>
-                  <input
-                    type="checkbox"
-                    name="selected_album_ids"
-                    value="{{ album.id }}"
-                    data-duration="{{ album.duration_seconds }}"
-                  />
-                  <div class="poster-wrap">
-                    {% if album.poster_path %}
-                      {% if '/app/data/' in album.poster_path %}
-                        <img src="/media/{{ album.poster_path.split('/app/data/')[1] }}" alt="{{ album.name }}" />
-                      {% elif 'data/' in album.poster_path %}
-                        <img src="/media/{{ album.poster_path.split('data/')[1] }}" alt="{{ album.name }}" />
-                      {% else %}
-                        <img src="/static/placeholder.svg" alt="{{ album.name }}" />
-                      {% endif %}
-                    {% else %}
-                      <img src="/static/placeholder.svg" alt="{{ album.name }}" />
-                    {% endif %}
-                  </div>
-                  <div class="meta">
-                    <strong title="{{ album.name }}">{{ album.name }}</strong>
-                    <span>{{ (album.duration_seconds / 60) | round(0, 'ceil') | int }} min</span>
-                  </div>
-                </label>
-              </article>
-            {% endfor %}
-          </div>
-        </section>
-      {% endfor %}
+      <div class="album-grid">
+        {% for album in albums %}
+          <article class="album">
+            <label>
+              <input
+                type="checkbox"
+                name="selected_album_ids"
+                value="{{ album.id }}"
+                data-duration="{{ album.duration_seconds }}"
+              />
+              <div class="poster-wrap">
+                {% if album.poster_path %}
+                  {% if '/app/data/' in album.poster_path %}
+                    <img src="/media/{{ album.poster_path.split('/app/data/')[1] }}" alt="{{ album.name }}" />
+                  {% elif 'data/' in album.poster_path %}
+                    <img src="/media/{{ album.poster_path.split('data/')[1] }}" alt="{{ album.name }}" />
+                  {% else %}
+                    <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                  {% endif %}
+                {% else %}
+                  <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                {% endif %}
+              </div>
+              <div class="meta">
+                <strong title="{{ album.name }}">{{ album.name }}</strong>
+                <span>{{ (album.duration_seconds / 60) | round(0, 'ceil') | int }} min</span>
+              </div>
+            </label>
+          </article>
+        {% endfor %}
+      </div>
     </form>
   </main>
+
+  <div id="upload-overlay" class="upload-overlay" hidden aria-live="assertive" role="status">
+    <div class="upload-overlay-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Uploading to Tonie…</p>
+      <small>This may take a minute. Please keep the page open.</small>
+    </div>
+  </div>
 
   <script>
     const checkboxes = Array.from(document.querySelectorAll('input[name="selected_album_ids"]'));
     const totalMinutesNode = document.getElementById('total-minutes');
     const durationHintNode = document.getElementById('duration-hint');
     const uploadButton = document.getElementById('upload-button');
-    const maxSeconds = 3600;
+    const maxSeconds = 5400;
 
     function updateTotals(changedBox = null) {
       let total = checkboxes
@@ -120,7 +123,7 @@
         total = checkboxes
           .filter((box) => box.checked)
           .reduce((sum, box) => sum + Number(box.dataset.duration || 0), 0);
-        durationHintNode.textContent = 'That would be over 60 minutes. Pick a shorter mix.';
+        durationHintNode.textContent = 'That would be over 90 minutes. Pick a shorter mix.';
       } else {
         durationHintNode.textContent = '';
       }
@@ -134,6 +137,11 @@
     });
 
     updateTotals();
+
+    document.getElementById('upload-form').addEventListener('submit', function () {
+      const overlay = document.getElementById('upload-overlay');
+      overlay.hidden = false;
+    });
   </script>
 </body>
 </html>

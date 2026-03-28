@@ -66,7 +66,7 @@ label {
 }
 
 input[type="text"],
-select {
+input[type="text"] {
   min-width: 300px;
   border: 2px solid #bfdbfe;
   border-radius: 12px;
@@ -124,6 +124,7 @@ select {
 }
 
 .tonie-image-wrap img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -234,10 +235,6 @@ button:disabled {
   object-fit: cover;
 }
 
-.tonie-image-wrap img {
-  display: block;
-}
-
 .meta {
   display: flex;
   flex-direction: column;
@@ -294,6 +291,59 @@ button:disabled {
   min-height: 1.1em;
 }
 
+.upload-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.upload-overlay[hidden] {
+  display: none;
+}
+
+.upload-overlay-card {
+  background: white;
+  border-radius: 20px;
+  padding: 36px 40px;
+  text-align: center;
+  box-shadow: 0 24px 48px rgba(30, 64, 175, 0.22);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 320px;
+  width: 90%;
+}
+
+.upload-overlay-card p {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.upload-overlay-card small {
+  color: #64748b;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 5px solid #bfdbfe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+
 @media (max-width: 760px) {
   .container {
     padding: 16px;
@@ -304,7 +354,7 @@ button:disabled {
   }
 
   input[type="text"],
-  select {
+  input[type="text"] {
     min-width: 100%;
   }
 

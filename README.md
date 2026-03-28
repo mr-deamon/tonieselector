@@ -11,7 +11,7 @@ Python web interface to manage kids audiobooks from folders and upload selected 
 - Poster logic:
   - use image from album folder if available
   - else extract embedded artwork from first audio file
-- Album selection with 60-minute cap
+- Album selection with 90-minute cap
 - Upload flow with configurable figure id and pluggable `my-tonies` API client
 
 ## Project structure
@@ -81,7 +81,7 @@ Then press **Process Inbox** in the UI (or `POST /scan`).
 
 ## Notes on `my-tonies` integration
 
-The client in `app/services/my_tonies.py` is intentionally minimal. Set `MY_TONIES_MOCK_UPLOAD=false` and configure:
+The client in `app/services/my_tonies.py` is intentionally minimal. Configure:
 
 - `MY_TONIES_BASE_URL`
 - `MY_TONIES_GRAPHQL_URL` (default: `https://api.prod.tcs.toys/v2/graphql`) for figurine fetch
@@ -91,6 +91,9 @@ The client in `app/services/my_tonies.py` is intentionally minimal. Set `MY_TONI
    - `MY_TONIES_PASSWORD`
    - optional OIDC parameters (`MY_TONIES_AUTH_BASE_URL`, `MY_TONIES_CLIENT_ID`, `MY_TONIES_REDIRECT_URI`, `MY_TONIES_SCOPE`, `MY_TONIES_UI_LOCALES`)
 - optional fallback selector values: `FIGURE_OPTIONS=id1:Kitchen Tonie,id2:Bedroom Tonie`
+- optional figure filtering (mutually exclusive – whitelist takes priority if both are set):
+  - `FIGURE_WHITELIST=id1,id2` – show **only** the listed figure IDs in the UI
+  - `FIGURE_BLACKLIST=id3,id4` – hide the listed figure IDs from the UI
 
 For username/password auth, the app performs the same OIDC browser login flow (PKCE + login form submit + auth code exchange) and reuses the access token until expiry.
 Upload flow uses Tonies v2 API endpoints:
