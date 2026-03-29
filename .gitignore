@@ -9,4 +9,5 @@ data/library/
 data/processed/
 data/rejected/
 data/posters/
+data/inbox/
 *.sqlite3

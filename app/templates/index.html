@@ -9,12 +9,12 @@
 <body>
   <main class="container">
     <header class="header">
-      <div>
-        <h1>Tonie Selector</h1>
+      <div class="header-brand">
+        <h1>🎵 Tonie Selector</h1>
         <p class="subtitle">Pick a Tonie, choose your stories, and keep it under 90 minutes.</p>
       </div>
       <form action="/scan" method="post" class="scan-form">
-        <button type="submit" class="secondary">Process Inbox ✨</button>
+        <button type="submit" class="secondary">✨ Process Inbox</button>
       </form>
     </header>
 
@@ -57,12 +57,23 @@
           {% endif %}
         </div>
 
-        <div class="duration-wrap">
-          <div class="duration">Total: <span id="total-minutes">0</span> min / 90 min</div>
-          <small id="duration-hint" class="duration-hint" aria-live="polite"></small>
+        <div class="toolbar-footer">
+          <div class="duration-wrap">
+            <div class="duration-label">Playlist duration</div>
+            <div class="duration-bar-track">
+              <div class="duration-bar-fill" id="bar-fill"></div>
+            </div>
+            <div class="duration"><span id="total-minutes">0</span> min / 90 min</div>
+            <small id="duration-hint" class="duration-hint" aria-live="polite"></small>
+          </div>
+          <button type="submit" id="upload-button">🚀 Upload to Tonie</button>
         </div>
-        <button type="submit" id="upload-button">Upload selection 🚀</button>
       </section>
+
+      <div class="section-header">
+        <span class="section-title">Available Stories</span>
+        <span class="section-badge">{{ albums | length }}</span>
+      </div>
 
       <div class="album-grid">
         {% for album in albums %}
@@ -110,7 +121,8 @@
     const checkboxes = Array.from(document.querySelectorAll('input[name="selected_album_ids"]'));
     const totalMinutesNode = document.getElementById('total-minutes');
     const durationHintNode = document.getElementById('duration-hint');
-    const uploadButton = document.getElementById('upload-button');
+    const uploadButton     = document.getElementById('upload-button');
+    const barFill          = document.getElementById('bar-fill');
     const maxSeconds = 5400;
 
     function updateTotals(changedBox = null) {
@@ -123,10 +135,14 @@
         total = checkboxes
           .filter((box) => box.checked)
           .reduce((sum, box) => sum + Number(box.dataset.duration || 0), 0);
-        durationHintNode.textContent = 'That would be over 90 minutes. Pick a shorter mix.';
+        durationHintNode.textContent = 'That would exceed 90 minutes — pick a shorter mix.';
       } else {
         durationHintNode.textContent = '';
       }
+
+      const pct = Math.min((total / maxSeconds) * 100, 100);
+      barFill.style.width = pct + '%';
+      barFill.classList.toggle('over', total > maxSeconds);
 
       uploadButton.disabled = total > maxSeconds;
       totalMinutesNode.textContent = String(Math.ceil(total / 60));
