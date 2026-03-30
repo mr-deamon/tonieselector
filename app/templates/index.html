@@ -23,52 +23,57 @@
     {% endif %}
 
     <form action="/upload" method="post" id="upload-form">
-      <section class="toolbar">
-        <div class="toolbar-group">
+      {% if figure_options and figure_options | length > 1 %}
+        <div class="tonie-picker-section">
           <p class="picker-title">Choose a Tonie</p>
-          {% if figure_options %}
-            <div class="tonie-grid" role="radiogroup" aria-label="Tonie figure">
-              {% for option in figure_options %}
-                <label class="tonie-card">
-                  <input
-                    type="radio"
-                    name="figure_id"
-                    value="{{ option.id }}"
-                    {% if option.id == selected_figure_id %}checked{% endif %}
-                    {% if not selected_figure_id and loop.first %}checked{% endif %}
-                  />
-                  <div class="tonie-image-wrap">
-                    {% set tonie_image = option.image_url %}
-                    {% if tonie_image %}
-                      <img src="{{ tonie_image }}" alt="{{ option.name }}" loading="lazy" />
-                    {% else %}
-                      <img src="/static/placeholder.svg" alt="{{ option.name }}" loading="lazy" />
-                    {% endif %}
-                  </div>
-                  <div class="tonie-name" title="{{ option.name }}">{{ option.name }}</div>
-                </label>
-              {% endfor %}
-            </div>
-          {% else %}
-            <input type="text" name="figure_id" value="{{ selected_figure_id or default_figure_id }}" placeholder="tonie-figure-id" />
-          {% endif %}
+          <div class="tonie-grid" role="radiogroup" aria-label="Tonie figure">
+            {% for option in figure_options %}
+              <label class="tonie-card">
+                <input
+                  type="radio"
+                  name="figure_id"
+                  value="{{ option.id }}"
+                  {% if option.id == selected_figure_id %}checked{% endif %}
+                  {% if not selected_figure_id and loop.first %}checked{% endif %}
+                />
+                <div class="tonie-image-wrap">
+                  {% set tonie_image = option.image_url %}
+                  {% if tonie_image %}
+                    <img src="{{ tonie_image }}" alt="{{ option.name }}" loading="lazy" />
+                  {% else %}
+                    <img src="/static/placeholder.svg" alt="{{ option.name }}" loading="lazy" />
+                  {% endif %}
+                </div>
+                <div class="tonie-name" title="{{ option.name }}">{{ option.name }}</div>
+              </label>
+            {% endfor %}
+          </div>
           {% if figure_api_error %}
             <small class="hint">Could not load figures from API. Using fallback selector values.</small>
           {% endif %}
         </div>
-
-        <div class="toolbar-footer">
-          <div class="duration-wrap">
-            <div class="duration-label">Playlist duration</div>
-            <div class="duration-bar-track">
-              <div class="duration-bar-fill" id="bar-fill"></div>
-            </div>
-            <div class="duration"><span id="total-minutes">0</span> min / 90 min</div>
-            <small id="duration-hint" class="duration-hint" aria-live="polite"></small>
-          </div>
-          <button type="submit" id="upload-button">🚀 Upload to Tonie</button>
+      {% elif figure_options and figure_options | length == 1 %}
+        <input type="hidden" name="figure_id" value="{{ figure_options[0].id }}" />
+      {% else %}
+        <div class="tonie-picker-section">
+          <input type="text" name="figure_id" value="{{ selected_figure_id or default_figure_id }}" placeholder="tonie-figure-id" />
+          {% if figure_api_error %}
+            <small class="hint">Could not load figures from API. Using fallback selector values.</small>
+          {% endif %}
         </div>
-      </section>
+      {% endif %}
+
+      <div class="action-bar">
+        <div class="duration-wrap">
+          <div class="duration-label">Playlist duration</div>
+          <div class="duration-bar-track">
+            <div class="duration-bar-fill" id="bar-fill"></div>
+          </div>
+          <div class="duration"><span id="total-minutes">0</span> min / 90 min</div>
+          <small id="duration-hint" class="duration-hint" aria-live="polite"></small>
+        </div>
+        <button type="submit" id="upload-button">🚀 Upload to Tonie</button>
+      </div>
 
       <div class="section-header">
         <span class="section-title">Available Stories</span>
