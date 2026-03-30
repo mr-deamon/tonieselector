@@ -1,5 +1,7 @@
 # Tonie Selector
 
+> **Disclaimer:** This is a private hobby project, fully vibe-coded with AI assistance. It is not intended for production use and comes with no guarantees or support.
+
 Python web interface to manage kids audiobooks from folders and upload selected albums to a configured Tonie figure.
 
 ## Features (MVP)
@@ -72,7 +74,6 @@ Drop files into:
 
 For flat drops directly in `data/inbox`, ingest now groups files by embedded audio tags first:
 
-- Series from `Performer/Artist`
 - Album from `Album`
 
 If tags are missing, filename parsing is used as fallback.
@@ -85,7 +86,6 @@ The client in `app/services/my_tonies.py` is intentionally minimal. Configure:
 
 - `MY_TONIES_BASE_URL`
 - `MY_TONIES_GRAPHQL_URL` (default: `https://api.prod.tcs.toys/v2/graphql`) for figurine fetch
-- either `MY_TONIES_API_TOKEN`
 - or username/password login via:
    - `MY_TONIES_USERNAME`
    - `MY_TONIES_PASSWORD`
