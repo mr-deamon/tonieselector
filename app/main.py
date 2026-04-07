@@ -65,10 +65,25 @@ async def manage_page(request: Request, db: Session = Depends(get_session)):
 
 async def _build_index_context(request: Request, db: Session, message: str | None = None, message_type: str = "info"):
     albums = (
-        db.execute(select(Album).order_by(Album.name.asc()))
+        db.execute(select(Album).options(selectinload(Album.series)).order_by(Album.name.asc()))
         .scalars()
         .all()
     )
+    albums = sorted(
+        albums,
+        key=lambda album: (
+            (album.series.name if album.series else album.name).casefold(),
+            album.name.casefold(),
+        ),
+    )
+
+    series_groups: list[dict[str, object]] = []
+    grouped_albums: dict[str, list[Album]] = {}
+    for album in albums:
+        series_name = album.series.name if album.series else album.name
+        grouped_albums.setdefault(series_name, []).append(album)
+    for series_name in sorted(grouped_albums.keys(), key=str.casefold):
+        series_groups.append({"name": series_name, "albums": grouped_albums[series_name]})
 
     query_message = request.query_params.get("message")
     query_message_type = request.query_params.get("message_type", "info")
@@ -102,6 +117,7 @@ async def _build_index_context(request: Request, db: Session, message: str | Non
     return {
         "request": request,
         "albums": albums,
+        "series_groups": series_groups,
         "default_figure_id": settings.default_figure_id,
         "selected_figure_id": selected_figure_id,
         "figure_options": figure_options,

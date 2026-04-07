@@ -83,37 +83,49 @@
         <span class="section-badge">{{ albums | length }}</span>
       </div>
 
-      <div class="album-grid">
-        {% for album in albums %}
-          <article class="album">
-            <label>
-              <input
-                type="checkbox"
-                name="selected_album_ids"
-                value="{{ album.id }}"
-                data-duration="{{ album.duration_seconds }}"
-              />
-              <div class="poster-wrap">
-                {% if album.poster_path %}
-                  {% if '/app/data/' in album.poster_path %}
-                    <img src="/media/{{ album.poster_path.split('/app/data/')[1] }}" alt="{{ album.name }}" />
-                  {% elif 'data/' in album.poster_path %}
-                    <img src="/media/{{ album.poster_path.split('data/')[1] }}" alt="{{ album.name }}" />
-                  {% else %}
-                    <img src="/static/placeholder.svg" alt="{{ album.name }}" />
-                  {% endif %}
-                {% else %}
-                  <img src="/static/placeholder.svg" alt="{{ album.name }}" />
-                {% endif %}
-              </div>
-              <div class="meta">
-                <strong title="{{ album.name }}">{{ album.name }}</strong>
-                <span>{{ (album.duration_seconds / 60) | round(0, 'ceil') | int }} min</span>
-              </div>
-            </label>
-          </article>
-        {% endfor %}
-      </div>
+      {% for group in series_groups %}
+        <section class="series-group">
+          {% if not loop.first %}
+            <hr class="series-divider" />
+          {% endif %}
+          <div class="series-header">
+            <span class="series-title" title="{{ group.name }}">{{ group.name }}</span>
+            <span class="series-badge">{{ group.albums | length }}</span>
+          </div>
+
+          <div class="album-grid">
+            {% for album in group.albums %}
+              <article class="album">
+                <label>
+                  <input
+                    type="checkbox"
+                    name="selected_album_ids"
+                    value="{{ album.id }}"
+                    data-duration="{{ album.duration_seconds }}"
+                  />
+                  <div class="poster-wrap">
+                    {% if album.poster_path %}
+                      {% if '/app/data/' in album.poster_path %}
+                        <img src="/media/{{ album.poster_path.split('/app/data/')[1] }}" alt="{{ album.name }}" />
+                      {% elif 'data/' in album.poster_path %}
+                        <img src="/media/{{ album.poster_path.split('data/')[1] }}" alt="{{ album.name }}" />
+                      {% else %}
+                        <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                      {% endif %}
+                    {% else %}
+                      <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                    {% endif %}
+                  </div>
+                  <div class="meta">
+                    <strong title="{{ album.name }}">{{ album.name }}</strong>
+                    <span>{{ (album.duration_seconds / 60) | round(0, 'ceil') | int }} min</span>
+                  </div>
+                </label>
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% endfor %}
     </form>
   </main>
 

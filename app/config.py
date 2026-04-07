@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     figure_options: str = ""
     figure_whitelist: str = ""
     figure_blacklist: str = ""
+    series_rules_path: Path = Path("config/series_rules.json")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -367,6 +367,46 @@ button.danger:hover {
   padding: 2px 10px;
 }
 
+/* ── Series groups ─────────────────────────────────────────── */
+.series-group {
+  margin-bottom: 20px;
+}
+
+.series-divider {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0 0 12px;
+  opacity: 0.9;
+}
+
+.series-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.series-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.series-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: rgba(56, 189, 248, 0.14);
+  color: var(--sky);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 99px;
+  padding: 2px 10px;
+  flex-shrink: 0;
+}
+
 /* ── Album grid ─────────────────────────────────────────────── */
 .album-grid {
   display: grid;
@@ -594,6 +634,22 @@ input[type="text"]:focus { outline: none; border-color: var(--sky); }
 @media (min-width: 640px) {
   .tonie-grid {
     grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  }
+}
+
+/* Tablet */
+@media (min-width: 640px) and (max-width: 1024px) {
+  .container {
+    padding: 16px 16px 44px;
+  }
+
+  .album-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 10px;
+  }
+
+  .series-group {
+    margin-bottom: 16px;
   }
 }
 

@@ -1,0 +1,27 @@
+{
+  "rules": [
+    {
+      "pattern": "^(?:0?\\d+[:. -]+)?Marvels Spidey und seine Super-Freunde",
+      "series": "Marvels Spidey und seine Super-Freunde"
+    },
+    {
+      "pattern": "^Käpt'?n? Sharky",
+      "series": "Käpt'n Sharky"
+    },
+    {
+      "pattern": "^Findus erklärt die Welt",
+      "series": "Findus erklärt die Welt"
+    },
+    {
+      "pattern": "^Folge\\s*\\d+",
+      "series": "Die Schlümpfe"
+    },
+    {
+      "pattern": "^Die Olchis",
+      "series": "Die Olchis"
+    }
+  ],
+  "overrides": {
+    "Mit em Felix dur d'Schwiiz": "Mit em Felix"
+  }
+}

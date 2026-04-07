@@ -84,6 +84,32 @@ Then press **Process Inbox** in the UI (or `POST /scan`).
 
 Alternatively, open `/manage`, select files, and submit once — the app stores uploads in `data/inbox` and runs the same `process_inbox + sync_library` stack automatically.
 
+## Series grouping rules
+
+Library sync supports both layouts:
+
+- `data/library/<Series>/<Album>/...` (classic)
+- `data/library/<Album>/...` (flat)
+
+For flat folders, the app infers `Series` from album folder names using `config/series_rules.json`.
+
+- Configure path via `SERIES_RULES_PATH` (default: `config/series_rules.json`)
+- Add regex entries under `rules` for broad matching
+- Add exact entries under `overrides` for one-off fixes
+
+Example:
+
+```json
+{
+   "rules": [
+      {"pattern": "^(?:0?\\d+[:. -]+)?Marvels Spidey", "series": "Marvels Spidey und seine Super-Freunde"}
+   ],
+   "overrides": {
+      "Mit em Felix dur d'Schwiiz": "Mit em Felix"
+   }
+}
+```
+
 ## Notes on `my-tonies` integration
 
 The client in `app/services/my_tonies.py` is intentionally minimal. Configure:

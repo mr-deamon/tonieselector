@@ -1,6 +1,8 @@
 import shutil
 import re
 import unicodedata
+import json
+from functools import lru_cache
 from pathlib import Path
 
 from mutagen import File as MutagenFile
@@ -25,6 +27,92 @@ def _slugify(name: str) -> str:
 
 def _normalize_text(value: str) -> str:
     return unicodedata.normalize("NFC", value).strip()
+
+
+def _normalize_series_key(value: str) -> str:
+    normalized = _normalize_text(value)
+    normalized = normalized.casefold()
+    normalized = normalized.replace("’", "'")
+    normalized = normalized.replace("`", "'")
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.strip()
+
+
+def _strip_episode_prefix(value: str) -> str:
+    stripped = value.strip()
+    patterns = [
+        r"^folge\s*\d+\s*[:.-]\s*",
+        r"^\d+\s*[:.-]\s*",
+        r"^\d+\s+",
+    ]
+    for pattern in patterns:
+        stripped = re.sub(pattern, "", stripped, flags=re.IGNORECASE)
+    return stripped.strip()
+
+
+@lru_cache(maxsize=1)
+def _load_series_rules() -> tuple[list[tuple[re.Pattern[str], str]], dict[str, str]]:
+    rules_path = settings.series_rules_path
+    if not rules_path.exists():
+        return [], {}
+
+    try:
+        raw = json.loads(rules_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [], {}
+
+    rule_entries = raw.get("rules") if isinstance(raw, dict) else []
+    override_entries = raw.get("overrides") if isinstance(raw, dict) else {}
+
+    compiled_rules: list[tuple[re.Pattern[str], str]] = []
+    if isinstance(rule_entries, list):
+        for entry in rule_entries:
+            if not isinstance(entry, dict):
+                continue
+            pattern = str(entry.get("pattern", "")).strip()
+            series = _normalize_text(str(entry.get("series", "")).strip())
+            if not pattern or not series:
+                continue
+            try:
+                compiled = re.compile(pattern, flags=re.IGNORECASE)
+            except re.error:
+                continue
+            compiled_rules.append((compiled, series))
+
+    overrides: dict[str, str] = {}
+    if isinstance(override_entries, dict):
+        for key, series in override_entries.items():
+            normalized_key = _normalize_series_key(str(key))
+            normalized_series = _normalize_text(str(series))
+            if normalized_key and normalized_series:
+                overrides[normalized_key] = normalized_series
+
+    return compiled_rules, overrides
+
+
+def _infer_series_name(album_name: str) -> str:
+    clean_album_name = _normalize_text(album_name)
+    simplified = _strip_episode_prefix(clean_album_name)
+
+    compiled_rules, overrides = _load_series_rules()
+    normalized_clean = _normalize_series_key(clean_album_name)
+    normalized_simplified = _normalize_series_key(simplified)
+
+    if normalized_clean in overrides:
+        return overrides[normalized_clean]
+    if normalized_simplified in overrides:
+        return overrides[normalized_simplified]
+
+    for pattern, series_name in compiled_rules:
+        if pattern.search(clean_album_name) or pattern.search(simplified):
+            return series_name
+
+    if ":" in simplified:
+        candidate = _normalize_text(simplified.split(":", maxsplit=1)[0])
+        if candidate:
+            return candidate
+
+    return simplified or clean_album_name
 
 
 def _parse_flat_filename(file_path: Path) -> str | None:
@@ -363,7 +451,7 @@ def process_inbox(session: Session) -> dict:
         if child_audio and not child_subdirs:
             # Flat album dir (new single-level layout): album name = series name
             album_name = inbox_child.name
-            result = _process_album_dir(inbox_child, album_name, album_name)
+            result = _process_album_dir(inbox_child, _infer_series_name(album_name), album_name)
         else:
             # Two-level layout: inbox_child is a series dir
             series_name = inbox_child.name
@@ -399,28 +487,67 @@ def sync_library(session: Session) -> dict:
     purged_series = 0
     existing_album_paths: set[str] = set()
 
-    for series_dir in sorted(path for path in library_root.iterdir() if path.is_dir()):
-        for album_dir in sorted(path for path in series_dir.iterdir() if path.is_dir()):
-            existing_album_paths.add(str(album_dir))
-            series_slug = _slugify(series_dir.name)
-            album_slug = _slugify(album_dir.name)
+    def _sync_album_dir(album_dir: Path, series_name: str, album_name: str) -> bool:
+        nonlocal added
+        album_path = str(album_dir)
+        existing_album_paths.add(album_path)
 
+        series_slug = _slugify(series_name)
+        album_slug = _slugify(album_name)
+
+        existing_by_path = session.scalar(select(Album).where(Album.path == album_path))
+        if existing_by_path is not None:
             series = session.scalar(select(Series).where(Series.slug == series_slug))
-            if series is not None:
-                existing = session.scalar(
-                    select(Album).where(Album.series_id == series.id, Album.slug == album_slug)
-                )
-                if existing is not None:
-                    _refresh_album(
-                        session,
-                        existing,
-                        album_dir,
-                        f"{series_slug}-{album_slug}",
-                    )
-                    continue
+            if series is None:
+                series = Series(name=series_name, slug=series_slug)
+                session.add(series)
+                session.flush()
 
-            _upsert_album(session, album_dir, series_dir.name, album_dir.name)
-            added += 1
+            existing_by_path.series_id = series.id
+            existing_by_path.name = album_name
+            existing_by_path.slug = album_slug
+            _refresh_album(session, existing_by_path, album_dir, f"{series_slug}-{album_slug}")
+            return True
+
+        series = session.scalar(select(Series).where(Series.slug == series_slug))
+        if series is not None:
+            existing = session.scalar(
+                select(Album).where(Album.series_id == series.id, Album.slug == album_slug)
+            )
+            if existing is not None:
+                _refresh_album(
+                    session,
+                    existing,
+                    album_dir,
+                    f"{series_slug}-{album_slug}",
+                )
+                return True
+
+        _upsert_album(session, album_dir, series_name, album_name)
+        added += 1
+        return True
+
+    for top_level_dir in sorted(path for path in library_root.iterdir() if path.is_dir()):
+        child_dirs = [path for path in top_level_dir.iterdir() if path.is_dir()]
+        child_audio = [path for path in top_level_dir.iterdir() if path.is_file() and path.suffix.lower() in AUDIO_EXTENSIONS]
+
+        if child_audio and not child_dirs:
+            album_dir = top_level_dir
+            album_name = album_dir.name
+            series_name = _infer_series_name(album_name)
+            _sync_album_dir(album_dir, series_name, album_name)
+            continue
+
+        if len(child_dirs) == 1 and child_dirs[0].name == top_level_dir.name and not child_audio:
+            album_dir = child_dirs[0]
+            album_name = album_dir.name
+            series_name = _infer_series_name(album_name)
+            _sync_album_dir(album_dir, series_name, album_name)
+            continue
+
+        series_dir = top_level_dir
+        for album_dir in sorted(path for path in series_dir.iterdir() if path.is_dir()):
+            _sync_album_dir(album_dir, series_dir.name, album_dir.name)
 
     for album in session.scalars(select(Album)).all():
         if album.path not in existing_album_paths:
