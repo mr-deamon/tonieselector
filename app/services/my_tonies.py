@@ -16,10 +16,28 @@ from app.config import settings
 class MyToniesClient:
     _cached_token: str | None = None
     _cached_token_expires_at: float = 0.0
-    _token_lock = asyncio.Lock()
+    _token_lock: asyncio.Lock | None = None
 
-    async def list_figures(self) -> list[dict[str, str]]:
-        households = await self._get_households()
+    @classmethod
+    def _get_token_lock(cls) -> asyncio.Lock:
+        """Lazily create the lock inside the running event loop to avoid
+        binding it to a different loop at import time."""
+        if cls._token_lock is None:
+            cls._token_lock = asyncio.Lock()
+        return cls._token_lock
+
+    async def list_figures(self, retries: int = 3, retry_delay: float = 2.0) -> list[dict[str, str]]:
+        last_exc: Exception | None = None
+        for attempt in range(retries):
+            try:
+                households = await self._get_households()
+                break
+            except Exception as exc:
+                last_exc = exc
+                if attempt < retries - 1:
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+        else:
+            raise last_exc  # type: ignore[misc]
 
         figures: list[dict[str, str]] = []
         seen_ids: set[str] = set()
@@ -230,7 +248,7 @@ class MyToniesClient:
         if self._cached_token and now < self._cached_token_expires_at:
             return self._cached_token
 
-        async with self._token_lock:
+        async with self._get_token_lock():
             now = time.time()
             if self._cached_token and now < self._cached_token_expires_at:
                 return self._cached_token
