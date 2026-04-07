@@ -18,9 +18,7 @@
       </div>
     </header>
 
-    {% if message %}
-      <div class="message {{ message_type }}">{{ message }}</div>
-    {% endif %}
+    <div class="message {% if message %}{{ message_type }}{% else %}info{% endif %}" {% if not message %}hidden{% endif %}>{{ message or '' }}</div>
 
     <section class="upload-panel">
       <form action="/manage" method="post" enctype="multipart/form-data" class="upload-form">
@@ -33,51 +31,72 @@
     </section>
 
     <section class="upload-panel manage-delete-panel">
-      <div class="section-header manage-delete-header">
-        <span class="section-title">Delete Albums</span>
-        <span class="section-badge">{{ albums | length }}</span>
-      </div>
 
       <form action="/albums/delete" method="post" class="upload-form">
-        <div class="album-grid">
-          {% for album in albums %}
-            <article class="album">
-              <div class="album-actions">
-                <button
-                  type="submit"
-                  class="danger"
-                  formaction="/albums/{{ album.id }}/delete"
-                  formmethod="post"
-                  onclick="return confirm('Delete this album from the library?');"
-                >🗑 Delete</button>
-              </div>
-              <label>
+        
+        <small class="hint">Select album cards below, then assign them to one series (similar to iOS app grouping).</small>
+
+        {% for group in grouped_albums %}
+          <section class="series-section">
+            <div class="series-header">
+              <div class="series-name" title="{{ group.series_name }}">{{ group.series_name }}</div>
+              <div class="series-rename-form" data-old-series-slug="{{ group.series_slug }}">
                 <input
-                  type="checkbox"
-                  name="selected_album_ids"
-                  value="{{ album.id }}"
+                  type="text"
+                  name="new_series_name"
+                  value="{{ group.series_name }}"
+                  aria-label="Rename series {{ group.series_name }}"
                 />
-                <div class="poster-wrap">
-                  {% if album.poster_path %}
-                    {% if '/app/data/' in album.poster_path %}
-                      <img src="/media/{{ album.poster_path.split('/app/data/')[1] }}" alt="{{ album.name }}" />
-                    {% elif 'data/' in album.poster_path %}
-                      <img src="/media/{{ album.poster_path.split('data/')[1] }}" alt="{{ album.name }}" />
-                    {% else %}
-                      <img src="/static/placeholder.svg" alt="{{ album.name }}" />
-                    {% endif %}
-                  {% else %}
-                    <img src="/static/placeholder.svg" alt="{{ album.name }}" />
-                  {% endif %}
-                </div>
-                <div class="meta">
-                  <strong title="{{ album.name }}">{{ album.name }}</strong>
-                  <span>{{ (album.duration_seconds / 60) | round(0, 'ceil') | int }} min</span>
-                </div>
-              </label>
-            </article>
-          {% endfor %}
-        </div>
+                <button type="button" class="secondary series-rename-button">Rename</button>
+              </div>
+            </div>
+
+            <div class="album-grid">
+              {% for album in group.albums %}
+                <article
+                  class="album manage-album-draggable"
+                  draggable="true"
+                  data-album-id="{{ album.id }}"
+                  data-series-name="{{ group.series_name }}"
+                >
+                  <div class="album-actions">
+                    <button
+                      type="submit"
+                      class="danger"
+                      formaction="/albums/{{ album.id }}/delete"
+                      formmethod="post"
+                      onclick="return confirm('Delete this album from the library?');"
+                    >🗑 Delete</button>
+                  </div>
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="selected_album_ids"
+                      value="{{ album.id }}"
+                    />
+                    <div class="poster-wrap">
+                      {% if album.poster_path %}
+                        {% if '/app/data/' in album.poster_path %}
+                          <img src="/media/{{ album.poster_path.split('/app/data/')[1] }}" alt="{{ album.name }}" />
+                        {% elif 'data/' in album.poster_path %}
+                          <img src="/media/{{ album.poster_path.split('data/')[1] }}" alt="{{ album.name }}" />
+                        {% else %}
+                          <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                        {% endif %}
+                      {% else %}
+                        <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                      {% endif %}
+                    </div>
+                    <div class="meta">
+                      <strong title="{{ album.name }}">{{ album.name }}</strong>
+                      <span>{{ (album.duration_seconds / 60) | round(0, 'ceil') | int }} min</span>
+                    </div>
+                  </label>
+                </article>
+              {% endfor %}
+            </div>
+          </section>
+        {% endfor %}
 
         <button
           type="submit"
@@ -97,15 +116,185 @@
   </div>
 
   <script>
+    const flashMessage = document.querySelector('.container .message');
     const uploadForm = document.querySelector('.upload-form');
     const uploadButton = document.getElementById('inbox-upload-button');
     const uploadStatus = document.getElementById('upload-status');
     const uploadOverlay = document.getElementById('upload-overlay');
+    const draggableAlbums = Array.from(document.querySelectorAll('.manage-album-draggable'));
+    const renameButtons = Array.from(document.querySelectorAll('.series-rename-button'));
+
+    let draggedAlbumId = '';
+    let draggedSeriesName = '';
+    let moveInProgress = false;
+
+    function showFlashMessage(text, type = 'success') {
+      if (!flashMessage) {
+        return;
+      }
+      flashMessage.classList.remove('success', 'error', 'info');
+      flashMessage.classList.add(type);
+      flashMessage.textContent = text;
+      flashMessage.hidden = false;
+    }
+
+    async function moveAlbumToSeries(albumId, targetSeries) {
+      const formData = new FormData();
+      formData.append('selected_album_ids', albumId);
+      formData.append('series_name', targetSeries);
+
+      const response = await fetch('/api/albums/group', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || 'Move failed.');
+      }
+      return result;
+    }
+
+    async function renameSeries(oldSeriesSlug, newSeriesName) {
+      const formData = new FormData();
+      formData.append('old_series_slug', oldSeriesSlug);
+      formData.append('new_series_name', newSeriesName);
+
+      const response = await fetch('/api/series/rename', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || 'Rename failed.');
+      }
+      return result;
+    }
 
     uploadForm.addEventListener('submit', function () {
       uploadButton.disabled = true;
       uploadStatus.textContent = 'Uploading files and running inbox processing...';
       uploadOverlay.hidden = false;
+    });
+
+    draggableAlbums.forEach((card) => {
+      card.addEventListener('dragstart', (event) => {
+        draggedAlbumId = card.dataset.albumId || '';
+        draggedSeriesName = card.dataset.seriesName || '';
+        card.classList.add('is-dragging');
+        event.dataTransfer.effectAllowed = 'move';
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('is-dragging');
+        draggableAlbums.forEach((item) => item.classList.remove('is-drop-target'));
+      });
+
+      card.addEventListener('dragover', (event) => {
+        const targetSeries = card.dataset.seriesName || '';
+        if (!draggedAlbumId || targetSeries === draggedSeriesName) {
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        card.classList.add('is-drop-target');
+      });
+
+      card.addEventListener('dragleave', () => {
+        card.classList.remove('is-drop-target');
+      });
+
+      card.addEventListener('drop', (event) => {
+        event.preventDefault();
+        card.classList.remove('is-drop-target');
+
+        const targetSeries = card.dataset.seriesName || '';
+        if (moveInProgress || !draggedAlbumId || !targetSeries || targetSeries === draggedSeriesName) {
+          return;
+        }
+
+        const sourceCard = draggableAlbums.find((item) => item.dataset.albumId === draggedAlbumId);
+        if (!sourceCard) {
+          return;
+        }
+
+        const sourceSection = sourceCard.closest('.series-section');
+        const targetSection = card.closest('.series-section');
+        const targetGrid = targetSection ? targetSection.querySelector('.album-grid') : null;
+        if (!targetGrid) {
+          return;
+        }
+
+        moveInProgress = true;
+        sourceCard.classList.add('is-dragging');
+        moveAlbumToSeries(draggedAlbumId, targetSeries)
+          .then((result) => {
+            targetGrid.prepend(sourceCard);
+            sourceCard.dataset.seriesName = result.target_series_name || targetSeries;
+            showFlashMessage(result.message, result.message_type || 'success');
+
+            if (sourceSection && sourceSection !== targetSection) {
+              const remaining = sourceSection.querySelectorAll('.manage-album-draggable').length;
+              if (remaining === 0) {
+                sourceSection.remove();
+              }
+            }
+          })
+          .catch((error) => {
+            showFlashMessage(error.message || 'Move failed.', 'error');
+          })
+          .finally(() => {
+            sourceCard.classList.remove('is-dragging');
+            moveInProgress = false;
+          });
+      });
+    });
+
+    renameButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const renameContainer = button.closest('.series-rename-form');
+        const section = button.closest('.series-section');
+        if (!renameContainer || !section) {
+          return;
+        }
+
+        const oldSeriesSlug = renameContainer.dataset.oldSeriesSlug || '';
+        const input = renameContainer.querySelector('input[name="new_series_name"]');
+        const seriesNameNode = section.querySelector('.series-name');
+        const newSeriesName = input ? input.value.trim() : '';
+
+        if (!oldSeriesSlug || !newSeriesName || !seriesNameNode) {
+          showFlashMessage('Please provide a valid series name.', 'error');
+          return;
+        }
+
+        button.disabled = true;
+        renameSeries(oldSeriesSlug, newSeriesName)
+          .then((result) => {
+            const resolvedName = result.new_series_name || newSeriesName;
+            const resolvedSlug = result.new_series_slug || oldSeriesSlug;
+
+            seriesNameNode.textContent = resolvedName;
+            seriesNameNode.title = resolvedName;
+            renameContainer.dataset.oldSeriesSlug = resolvedSlug;
+            if (input) {
+              input.value = resolvedName;
+            }
+
+            section.querySelectorAll('.manage-album-draggable').forEach((albumCard) => {
+              albumCard.dataset.seriesName = resolvedName;
+            });
+
+            showFlashMessage(result.message, result.message_type || 'success');
+          })
+          .catch((error) => {
+            showFlashMessage(error.message || 'Rename failed.', 'error');
+          })
+          .finally(() => {
+            button.disabled = false;
+          });
+      });
     });
   </script>
 </body>

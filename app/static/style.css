@@ -330,7 +330,8 @@ button.danger:hover {
 
 .button-link.secondary:hover { border-color: var(--sky); color: var(--sky); }
 
-/* ── Scan / Process Inbox button — subtle, for admins only ───── */
+/* ── Header action buttons — subtle and compact ───────────────── */
+.header-actions .button-link.secondary,
 .scan-form button {
   font-size: 0.72rem;
   padding: 6px 12px;
@@ -339,7 +340,11 @@ button.danger:hover {
   font-weight: 600;
   letter-spacing: 0.01em;
 }
-.scan-form button:hover { opacity: 0.9; }
+
+.header-actions .button-link.secondary:hover,
+.scan-form button:hover {
+  opacity: 0.9;
+}
 
 /* ── Albums section header ───────────────────────────────────── */
 .section-header {
@@ -367,6 +372,68 @@ button.danger:hover {
   padding: 2px 10px;
 }
 
+.series-section {
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.series-section:last-of-type {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.series-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.series-name {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sky);
+}
+
+.series-rename-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.series-rename-form input[type="text"] {
+  width: 220px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.series-rename-form button {
+  min-height: unset;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+}
+
+.series-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.series-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--violet);
+}
+
 /* ── Album grid ─────────────────────────────────────────────── */
 .album-grid {
   display: grid;
@@ -388,6 +455,21 @@ button.danger:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-hover);
   border-color: #475569;
+}
+
+.manage-album-draggable {
+  cursor: grab;
+}
+
+.manage-album-draggable.is-dragging {
+  opacity: 0.55;
+  transform: scale(0.98);
+  cursor: grabbing;
+}
+
+.manage-album-draggable.is-drop-target {
+  border-color: var(--sky);
+  box-shadow: 0 0 0 3px var(--sky-glow), var(--shadow-hover);
 }
 
 .album:has(input[type="checkbox"]:checked) {
@@ -532,6 +614,21 @@ input[type="text"]:focus { outline: none; border-color: var(--sky); }
   gap: 10px;
 }
 
+.manage-group-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.manage-group-row input[type="text"] {
+  flex: 1;
+}
+
+.manage-group-row button {
+  min-height: unset;
+  padding: 10px 16px;
+}
+
 .file-picker-label {
   font-size: 0.82rem;
   font-weight: 800;
@@ -616,4 +713,18 @@ input[type="text"]:focus { outline: none; border-color: var(--sky); }
 
   button:not(#upload-button) { width: 100%; text-align: center; }
   .scan-form    { width: 100%; }
+  .manage-group-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .series-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .series-rename-form {
+    width: 100%;
+  }
+  .series-rename-form input[type="text"] {
+    width: 100%;
+  }
 }

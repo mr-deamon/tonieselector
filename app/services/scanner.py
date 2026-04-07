@@ -4,6 +4,7 @@ import unicodedata
 from pathlib import Path
 
 from mutagen import File as MutagenFile
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -218,10 +219,23 @@ def _upsert_album(session: Session, album_folder: Path, series_name: str, album_
         session.add(series)
         session.flush()
 
+    album_path = str(album_folder)
+
+    existing_by_path = session.scalar(select(Album).where(Album.path == album_path))
+    if existing_by_path is not None:
+        existing_by_path.series_id = series.id
+        existing_by_path.name = album_name
+        existing_by_path.slug = album_slug
+        existing_by_path.path = album_path
+        _refresh_album(session, existing_by_path, album_folder, f"{series_slug}-{album_slug}")
+        return existing_by_path
+
     existing_album = session.scalar(
         select(Album).where(Album.series_id == series.id, Album.slug == album_slug)
     )
     if existing_album is not None:
+        existing_album.name = album_name
+        existing_album.path = album_path
         _refresh_album(session, existing_album, album_folder, f"{series_slug}-{album_slug}")
         return existing_album
 
@@ -237,7 +251,7 @@ def _upsert_album(session: Session, album_folder: Path, series_name: str, album_
         series_id=series.id,
         name=album_name,
         slug=album_slug,
-        path=str(album_folder),
+        path=album_path,
         poster_path=str(poster) if poster else None,
         duration_seconds=duration,
     )
@@ -419,8 +433,14 @@ def sync_library(session: Session) -> dict:
                     )
                     continue
 
-            _upsert_album(session, album_dir, series_dir.name, album_dir.name)
-            added += 1
+            try:
+                with session.begin_nested():
+                    _upsert_album(session, album_dir, series_dir.name, album_dir.name)
+                added += 1
+            except IntegrityError:
+                continue
+            except Exception:
+                continue
 
     for album in session.scalars(select(Album)).all():
         if album.path not in existing_album_paths:
