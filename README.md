@@ -8,8 +8,10 @@ Python web interface to manage kids audiobooks from folders and upload selected 
 
 - Folder-first library model: `Series/Album`
 - Inbox processing: drop new downloads in `data/inbox` and run ingest
+- Manage GUI at `/manage` to send files directly into inbox + trigger ingest
 - Duplicate detection for existing series/album combinations
 - Automatic library sync on startup and `/scan`, including DB purge for removed album folders
+- Album deletion from `/manage` (single album or bulk selected albums)
 - Poster logic:
   - use image from album folder if available
   - else extract embedded artwork from first audio file
@@ -80,6 +82,8 @@ If tags are missing, filename parsing is used as fallback.
 
 Then press **Process Inbox** in the UI (or `POST /scan`).
 
+Alternatively, open `/manage`, select files, and submit once — the app stores uploads in `data/inbox` and runs the same `process_inbox + sync_library` stack automatically.
+
 ## Notes on `my-tonies` integration
 
 The client in `app/services/my_tonies.py` is intentionally minimal. Configure:
@@ -107,3 +111,5 @@ The final chapter payload shape can vary by backend version; the client currentl
 
 When API credentials are available, the web UI fetches available figures via GraphQL (`households -> creativeTonies`) and shows a dropdown.
 If fetching fails (or credentials are missing), the UI falls back to `FIGURE_OPTIONS` (or manual figure id input).
+
+The Tonie transfer endpoint is `POST /upload-to-tonie` (used by the main selector page).

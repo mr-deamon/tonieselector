@@ -1,7 +1,8 @@
 from pathlib import Path
 from urllib.parse import urlencode
+import shutil
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -34,6 +35,32 @@ def startup() -> None:
 async def index(request: Request, db: Session = Depends(get_session)):
     context = await _build_index_context(request, db)
     return templates.TemplateResponse("index.html", context)
+
+
+@app.get("/upload")
+async def upload_page(request: Request):
+    query = urlencode({"message": "Upload page moved to /manage.", "message_type": "info"})
+    return RedirectResponse(url=f"/manage?{query}", status_code=307)
+
+
+@app.get("/manage")
+async def manage_page(request: Request, db: Session = Depends(get_session)):
+    message = request.query_params.get("message")
+    message_type = request.query_params.get("message_type", "info")
+    albums = (
+        db.execute(select(Album).order_by(Album.name.asc()))
+        .scalars()
+        .all()
+    )
+    return templates.TemplateResponse(
+        "manage.html",
+        {
+            "request": request,
+            "message": message,
+            "message_type": message_type,
+            "albums": albums,
+        },
+    )
 
 
 async def _build_index_context(request: Request, db: Session, message: str | None = None, message_type: str = "info"):
@@ -103,7 +130,131 @@ def scan(db: Session = Depends(get_session)):
 
 
 @app.post("/upload")
-async def upload(
+def upload_files(
+    files: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_session),
+):
+    query = urlencode({"message": "Upload endpoint moved to /manage.", "message_type": "info"})
+    return RedirectResponse(url=f"/manage?{query}", status_code=307)
+
+
+@app.post("/manage")
+def manage_upload_files(
+    files: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_session),
+):
+    inbox_root = settings.data_root / "inbox"
+    inbox_root.mkdir(parents=True, exist_ok=True)
+
+    saved_count = 0
+    for uploaded_file in files:
+        if not uploaded_file.filename:
+            continue
+
+        original_name = Path(uploaded_file.filename).name
+        if not original_name:
+            continue
+
+        destination = inbox_root / original_name
+        stem = destination.stem
+        suffix = destination.suffix
+        counter = 1
+        while destination.exists():
+            destination = inbox_root / f"{stem}-{counter}{suffix}"
+            counter += 1
+
+        with destination.open("wb") as output:
+            shutil.copyfileobj(uploaded_file.file, output)
+        saved_count += 1
+
+    if saved_count == 0:
+        query = urlencode({"message": "No files uploaded.", "message_type": "error"})
+        return RedirectResponse(url=f"/manage?{query}", status_code=303)
+
+    inbox_result = process_inbox(db)
+    sync_result = sync_library(db)
+    message = (
+        f"Uploaded {saved_count} file(s). "
+        "Inbox processed: "
+        f"staged {inbox_result.get('staged', 0)}, "
+        f"added {inbox_result.get('added', 0)}, "
+        f"duplicates {inbox_result.get('duplicates', 0)}, "
+        f"rejected {inbox_result.get('rejected', 0)}, "
+        f"library synced {sync_result.get('synced', 0)}."
+    )
+    query = urlencode({"message": message, "message_type": "success"})
+    return RedirectResponse(url=f"/manage?{query}", status_code=303)
+
+
+@app.post("/albums/{album_id}/delete")
+def delete_album(album_id: int, db: Session = Depends(get_session)):
+    album = db.get(Album, album_id)
+    if album is None:
+        query = urlencode({"message": "Album not found.", "message_type": "error"})
+        return RedirectResponse(url=f"/?{query}", status_code=303)
+
+    deleted, error = _delete_album_files(album)
+    if not deleted:
+        query = urlencode({"message": error or "Delete failed.", "message_type": "error"})
+        return RedirectResponse(url=f"/?{query}", status_code=303)
+
+    sync_result = sync_library(db)
+    message = (
+        f"Deleted album '{album.name}'. "
+        f"Library synced {sync_result.get('synced', 0)}, "
+        f"purged albums {sync_result.get('purged_albums', 0)}, "
+        f"purged series {sync_result.get('purged_series', 0)}."
+    )
+    query = urlencode({"message": message, "message_type": "success"})
+    return RedirectResponse(url=f"/?{query}", status_code=303)
+
+
+@app.post("/albums/delete")
+def bulk_delete_albums(
+    selected_album_ids: list[int] = Form(default=[]),
+    db: Session = Depends(get_session),
+):
+    if not selected_album_ids:
+        query = urlencode({"message": "No albums selected.", "message_type": "error"})
+        return RedirectResponse(url=f"/?{query}", status_code=303)
+
+    albums = (
+        db.execute(select(Album).where(Album.id.in_(selected_album_ids)))
+        .scalars()
+        .all()
+    )
+    albums_by_id = {album.id: album for album in albums}
+
+    deleted_count = 0
+    missing_count = 0
+    failed_count = 0
+
+    for album_id in selected_album_ids:
+        album = albums_by_id.get(album_id)
+        if album is None:
+            missing_count += 1
+            continue
+
+        deleted, _ = _delete_album_files(album)
+        if deleted:
+            deleted_count += 1
+        else:
+            failed_count += 1
+
+    sync_result = sync_library(db)
+    message = (
+        f"Bulk delete: removed {deleted_count}, missing {missing_count}, failed {failed_count}. "
+        f"Library synced {sync_result.get('synced', 0)}, "
+        f"purged albums {sync_result.get('purged_albums', 0)}, "
+        f"purged series {sync_result.get('purged_series', 0)}."
+    )
+    message_type = "success" if failed_count == 0 else "error"
+    query = urlencode({"message": message, "message_type": message_type})
+    return RedirectResponse(url=f"/?{query}", status_code=303)
+
+
+@app.post("/upload-to-tonie")
+async def upload_to_tonie(
     request: Request,
     selected_album_ids: list[int] = Form(default=[]),
     figure_id: str = Form(default=""),
@@ -150,3 +301,37 @@ async def upload(
 async def _render_with_message(request: Request, db: Session, message: str, message_type: str):
     context = await _build_index_context(request, db, message=message, message_type=message_type)
     return templates.TemplateResponse("index.html", context)
+
+
+def _delete_album_files(album: Album) -> tuple[bool, str | None]:
+    album_path = Path(album.path)
+    library_root = (settings.data_root / "library").resolve()
+    processed_marker = settings.data_root / "processed" / album.series.name / f"{album.name}.processed"
+
+    if album_path.exists():
+        try:
+            resolved_album_path = album_path.resolve()
+            if library_root in resolved_album_path.parents:
+                shutil.rmtree(resolved_album_path)
+            else:
+                return False, "Refused to delete album outside library root."
+        except OSError as exc:
+            return False, f"Delete failed: {exc}"
+
+    if processed_marker.exists():
+        try:
+            processed_marker.unlink()
+        except OSError:
+            pass
+
+    poster_path = Path(album.poster_path) if album.poster_path else None
+    posters_root = (settings.data_root / "posters").resolve()
+    if poster_path and poster_path.exists():
+        try:
+            resolved_poster_path = poster_path.resolve()
+            if posters_root in resolved_poster_path.parents:
+                resolved_poster_path.unlink()
+        except OSError:
+            pass
+
+    return True, None

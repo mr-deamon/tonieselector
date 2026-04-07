@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tonie Selector · Manage</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container upload-page">
+    <header class="header">
+      <div class="header-brand">
+        <h1>🛠️ Manage Library</h1>
+        <p class="subtitle">Upload files to inbox and delete albums from your library.</p>
+      </div>
+      <div class="header-actions">
+        <a href="/" class="button-link secondary">⬅ Back to Selector</a>
+      </div>
+    </header>
+
+    {% if message %}
+      <div class="message {{ message_type }}">{{ message }}</div>
+    {% endif %}
+
+    <section class="upload-panel">
+      <form action="/manage" method="post" enctype="multipart/form-data" class="upload-form">
+        <label class="file-picker-label" for="files">Choose audio/image files</label>
+        <input id="files" type="file" name="files" multiple required />
+        <small class="hint">Accepted by ingestion: .mp3, .m4a, .flac, .ogg, .wav, .jpg, .jpeg, .png, .webp</small>
+        <button type="submit" id="inbox-upload-button">Upload and Process</button>
+        <small id="upload-status" class="hint" aria-live="polite"></small>
+      </form>
+    </section>
+
+    <section class="upload-panel manage-delete-panel">
+      <div class="section-header manage-delete-header">
+        <span class="section-title">Delete Albums</span>
+        <span class="section-badge">{{ albums | length }}</span>
+      </div>
+
+      <form action="/albums/delete" method="post" class="upload-form">
+        <div class="album-grid">
+          {% for album in albums %}
+            <article class="album">
+              <div class="album-actions">
+                <button
+                  type="submit"
+                  class="danger"
+                  formaction="/albums/{{ album.id }}/delete"
+                  formmethod="post"
+                  onclick="return confirm('Delete this album from the library?');"
+                >🗑 Delete</button>
+              </div>
+              <label>
+                <input
+                  type="checkbox"
+                  name="selected_album_ids"
+                  value="{{ album.id }}"
+                />
+                <div class="poster-wrap">
+                  {% if album.poster_path %}
+                    {% if '/app/data/' in album.poster_path %}
+                      <img src="/media/{{ album.poster_path.split('/app/data/')[1] }}" alt="{{ album.name }}" />
+                    {% elif 'data/' in album.poster_path %}
+                      <img src="/media/{{ album.poster_path.split('data/')[1] }}" alt="{{ album.name }}" />
+                    {% else %}
+                      <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                    {% endif %}
+                  {% else %}
+                    <img src="/static/placeholder.svg" alt="{{ album.name }}" />
+                  {% endif %}
+                </div>
+                <div class="meta">
+                  <strong title="{{ album.name }}">{{ album.name }}</strong>
+                  <span>{{ (album.duration_seconds / 60) | round(0, 'ceil') | int }} min</span>
+                </div>
+              </label>
+            </article>
+          {% endfor %}
+        </div>
+
+        <button
+          type="submit"
+          class="danger bulk-delete-manage"
+          onclick="return confirm('Delete all selected albums from the library?');"
+        >🗑 Delete Selected</button>
+      </form>
+    </section>
+  </main>
+
+  <div id="upload-overlay" class="upload-overlay" hidden aria-live="assertive" role="status">
+    <div class="upload-overlay-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Uploading and processing…</p>
+      <small>Please keep this page open until completion.</small>
+    </div>
+  </div>
+
+  <script>
+    const uploadForm = document.querySelector('.upload-form');
+    const uploadButton = document.getElementById('inbox-upload-button');
+    const uploadStatus = document.getElementById('upload-status');
+    const uploadOverlay = document.getElementById('upload-overlay');
+
+    uploadForm.addEventListener('submit', function () {
+      uploadButton.disabled = true;
+      uploadStatus.textContent = 'Uploading files and running inbox processing...';
+      uploadOverlay.hidden = false;
+    });
+  </script>
+</body>
+</html>

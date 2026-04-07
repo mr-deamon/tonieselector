@@ -13,16 +13,19 @@
         <h1>🎵 Tonie Selector</h1>
         <p class="subtitle">Pick a Tonie, choose your stories, and keep it under 90 minutes.</p>
       </div>
-      <form action="/scan" method="post" class="scan-form">
-        <button type="submit" class="secondary">✨ Process Inbox</button>
-      </form>
+      <div class="header-actions">
+        <a href="/manage" class="button-link secondary">🛠️ Manage Library</a>
+        <form action="/scan" method="post" class="scan-form">
+          <button type="submit" class="secondary">✨ Process Inbox</button>
+        </form>
+      </div>
     </header>
 
     {% if message %}
       <div class="message {{ message_type }}">{{ message }}</div>
     {% endif %}
 
-    <form action="/upload" method="post" id="upload-form">
+    <form action="/upload-to-tonie" method="post" id="upload-form">
       {% if figure_options and figure_options | length > 1 %}
         <div class="tonie-picker-section">
           <p class="picker-title">Choose a Tonie</p>

@@ -70,6 +70,13 @@ body {
   flex-wrap: wrap;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .header-brand { display: flex; flex-direction: column; gap: 3px; }
 
 .header h1 {
@@ -291,6 +298,38 @@ button.secondary {
 }
 button.secondary:hover { border-color: var(--sky); color: var(--sky); }
 
+button.danger {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+}
+button.danger:hover {
+  background: rgba(248, 113, 113, 0.28);
+  border-color: rgba(248, 113, 113, 0.75);
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border-radius: var(--r-sm);
+  padding: 12px 22px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  min-height: 48px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.button-link.secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.button-link.secondary:hover { border-color: var(--sky); color: var(--sky); }
+
 /* ── Scan / Process Inbox button — subtle, for admins only ───── */
 .scan-form button {
   font-size: 0.72rem;
@@ -342,6 +381,7 @@ button.secondary:hover { border-color: var(--sky); color: var(--sky); }
   overflow: hidden;
   border: 2px solid var(--border);
   transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  position: relative;
 }
 
 .album:hover {
@@ -361,6 +401,19 @@ button.secondary:hover { border-color: var(--sky); color: var(--sky); }
   cursor: pointer;
   height: 100%;
   position: relative;
+}
+
+.album-actions {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+}
+
+.album-actions button {
+  min-height: unset;
+  padding: 5px 10px;
+  font-size: 0.7rem;
 }
 
 /* Floating checkbox */
@@ -449,6 +502,51 @@ input[type="text"] {
 input[type="text"]:focus { outline: none; border-color: var(--sky); }
 
 .hint { font-size: 0.78rem; color: var(--text-muted); }
+
+.upload-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 18px;
+  box-shadow: var(--shadow-card);
+  max-width: 720px;
+}
+
+.manage-delete-panel {
+  margin-top: 16px;
+  max-width: 980px;
+}
+
+.manage-delete-header {
+  margin-bottom: 10px;
+}
+
+.bulk-delete-manage {
+  align-self: flex-start;
+  margin-top: 10px;
+}
+
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.file-picker-label {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.upload-form input[type="file"] {
+  background: var(--surface-2);
+  border: 2px dashed var(--border);
+  border-radius: var(--r-sm);
+  padding: 16px;
+  color: var(--text);
+}
 
 /* ── Upload overlay ─────────────────────────────────────────── */
 .upload-overlay {
