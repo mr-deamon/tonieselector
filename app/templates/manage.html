@@ -98,11 +98,24 @@
           </section>
         {% endfor %}
 
-        <button
-          type="submit"
-          class="danger bulk-delete-manage"
-          onclick="return confirm('Delete all selected albums from the library?');"
-        >🗑 Delete Selected</button>
+        <div class="bulk-actions">
+          <div class="bulk-move-controls">
+            <select id="bulk-move-series" class="bulk-move-select" aria-label="Select series to move albums to">
+              <option value="">Choose series for bulk move...</option>
+              {% for group in grouped_albums %}
+                <option value="{{ group.series_name }}">{{ group.series_name }}</option>
+              {% endfor %}
+            </select>
+            <button type="button" id="bulk-move-button" class="secondary" onclick="bulkMoveSelectedAlbums()">
+              ➜ Move Selected to Series
+            </button>
+          </div>
+          <button
+            type="submit"
+            class="danger bulk-delete-manage"
+            onclick="return confirm('Delete all selected albums from the library?');"
+          >🗑 Delete Selected</button>
+        </div>
       </form>
     </section>
   </main>
@@ -136,6 +149,53 @@
       flashMessage.classList.add(type);
       flashMessage.textContent = text;
       flashMessage.hidden = false;
+    }
+
+    function bulkMoveSelectedAlbums() {
+      const bulkMoveSelect = document.getElementById('bulk-move-series');
+      const targetSeries = bulkMoveSelect.value;
+      if (!targetSeries) {
+        showFlashMessage('Please select a target series.', 'error');
+        return;
+      }
+
+      const selectedCheckboxes = document.querySelectorAll('input[name="selected_album_ids"]:checked');
+      const selectedAlbumIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value, 10));
+
+      if (selectedAlbumIds.length === 0) {
+        showFlashMessage('Please select at least one album.', 'error');
+        return;
+      }
+
+      const confirmMsg = `Move ${selectedAlbumIds.length} album${selectedAlbumIds.length !== 1 ? 's' : ''} to "${targetSeries}"?`;
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
+      const bulkMoveButton = document.getElementById('bulk-move-button');
+      bulkMoveButton.disabled = true;
+
+      const formData = new FormData();
+      selectedAlbumIds.forEach(id => formData.append('selected_album_ids', id));
+      formData.append('series_name', targetSeries);
+
+      fetch('/api/albums/group', {
+        method: 'POST',
+        body: formData,
+      })
+        .then(response => response.json())
+        .then(result => {
+          showFlashMessage(result.message, result.message_type || 'success');
+          if (result.message_type === 'success' || result.message_type === 'error') {
+            setTimeout(() => window.location.reload(), 1500);
+          }
+        })
+        .catch(error => {
+          showFlashMessage(error.message || 'Bulk move failed.', 'error');
+        })
+        .finally(() => {
+          bulkMoveButton.disabled = false;
+        });
     }
 
     async function moveAlbumToSeries(albumId, targetSeries) {

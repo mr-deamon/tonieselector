@@ -591,11 +591,12 @@ input[type="text"]:focus { outline: none; border-color: var(--sky); }
   border-radius: var(--r-card);
   padding: 18px;
   box-shadow: var(--shadow-card);
-  max-width: 720px;
+  max-width: 980px;
+  margin: 0 auto 16px;
 }
 
 .manage-delete-panel {
-  margin-top: 16px;
+  margin: 0 auto;
   max-width: 980px;
 }
 
@@ -606,6 +607,41 @@ input[type="text"]:focus { outline: none; border-color: var(--sky); }
 .bulk-delete-manage {
   align-self: flex-start;
   margin-top: 10px;
+}
+
+.bulk-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.bulk-move-controls {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.bulk-move-select {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 0.92rem;
+  transition: border-color 150ms ease;
+}
+
+.bulk-move-select:focus {
+  outline: none;
+  border-color: var(--sky);
+}
+
+#bulk-move-button {
+  min-height: unset;
+  padding: 10px 16px;
+  white-space: nowrap;
 }
 
 .upload-form {
