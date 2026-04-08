@@ -569,7 +569,11 @@ def _rename_series_internal(db: Session, old_series_slug: str, new_series_name: 
 
     conflicting_series = db.scalar(select(Series).where(Series.slug == new_series_slug))
     if conflicting_series is not None and conflicting_series.id != series.id:
-        return {"message": "Target series already exists.", "message_type": "error"}
+        has_albums = db.scalar(select(Album.id).where(Album.series_id == conflicting_series.id).limit(1)) is not None
+        if has_albums:
+            return {"message": "Target series already exists.", "message_type": "error"}
+        db.delete(conflicting_series)
+        db.flush()
 
     old_series_name = series.name
     library_root = settings.data_root / "library"
