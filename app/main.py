@@ -323,6 +323,9 @@ async def upload_to_tonie(
     figure_id: str = Form(default=""),
     db: Session = Depends(get_session),
 ):
+    if not selected_album_ids:
+        return await _render_with_message(request, db, "Select at least one story before uploading.", "error")
+
     albums = (
         db.execute(
             select(Album)

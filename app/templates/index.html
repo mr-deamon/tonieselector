@@ -162,7 +162,7 @@
       barFill.style.width = pct + '%';
       barFill.classList.toggle('over', total > maxSeconds);
 
-      uploadButton.disabled = total > maxSeconds;
+      uploadButton.disabled = total === 0 || total > maxSeconds;
       totalMinutesNode.textContent = String(Math.ceil(total / 60));
 
       seriesToggles.forEach((toggle) => {
@@ -202,7 +202,13 @@
 
     updateTotals();
 
-    document.getElementById('upload-form').addEventListener('submit', function () {
+    document.getElementById('upload-form').addEventListener('submit', function (event) {
+      const hasSelection = checkboxes.some((box) => box.checked);
+      if (!hasSelection) {
+        event.preventDefault();
+        durationHintNode.textContent = 'Select at least one story before uploading.';
+        return;
+      }
       const overlay = document.getElementById('upload-overlay');
       overlay.hidden = false;
     });
